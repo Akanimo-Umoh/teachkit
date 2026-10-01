@@ -1,111 +1,78 @@
-# Meterwise
+# TeachKit
 
-**Understand what you were charged. Know what to do if it's wrong.**
+An AI teaching workspace that helps private-school teachers prepare lessons, generate assessments and review student work, while keeping the teacher in control of every AI-generated decision.
 
-Meterwise is an AI-native copilot for Nigerian electricity customers. Photograph a prepaid token receipt or a bill, confirm what was read, and get a sourced, plain-language check of the charges, plus guided next steps and a complaint draft you approve yourself.
+> **AI proposes → Teacher reviews → Teacher decides → System records.**
 
-- **Live site:** https://YOUR-PROJECT.vercel.app  <!-- replace after deploying to Vercel -->
-- **Status:** Phase 1a (product strategy and frontend architecture). Planning build only: the live page is a placeholder and does not check real bills yet.
-- **Track:** Flexisaf AI Native Frontend (Advanced)
-- **Author:** Akanimo Umoh
+**Live demo:** _add Vercel URL here_
+**Author:** Akanimo Umoh
+**Programme:** Flexisaf Internship, Advanced Frontend (Fully AI-Native Track)
 
-## Phase 1a deliverables
+## Status
 
-| Deliverable | Where |
+Phase 1, Week 1: product strategy and frontend architecture. This repo currently contains planning documents; the app is built up module by module.
+
+## Documents
+
+| Document | Description |
 |---|---|
-| Product brief | [docs/01-product-brief.md](docs/01-product-brief.md) |
-| System boundary diagram | [docs/02-system-boundary-diagram.md](docs/02-system-boundary-diagram.md) |
-| Risk register | [docs/03-risk-register.md](docs/03-risk-register.md) |
-| README | This file |
-| Live Vercel URL | See the link at the top of this file |
+| [Product brief](./docs/product-brief.md) | Problem, users, jobs-to-be-done, AI use cases, flows, acceptance criteria, privacy, state decisions |
+| [System diagram](./docs/system-diagram.md) | Browser / server / model / external boundaries, sequence and approval-loop diagrams |
+| [Risk register](./docs/risk-register.md) | Risks, likelihood, impact and mitigations |
 
-## The idea in 60 seconds
+## What TeachKit does
 
-**Problem.** Electricity bills and prepaid token receipts are hard to verify, and the route to redress is unclear. Press coverage shows customers questioning whether units match payments, and regulators ordering refunds for billing errors. Existing tools cover outages, generic calculators, or static explainers; none I found reads your own receipt and guides you through evidence and complaint steps. (See the brief for sources and the caveats on that claim.)
+1. **Lesson plans:** the teacher describes a class and topic, the AI drafts a lesson plan, the teacher edits and approves it.
+2. **Quizzes:** from an approved lesson, the AI drafts questions and an answer key; the teacher reviews each question before approving.
+3. **Assistive feedback (later):** the AI suggests feedback on student answers; the teacher decides the final result. The AI never assigns a grade.
 
-**Solution.** A short guided flow:
-
-1. Photograph a token receipt or bill.
-2. Confirm what Meterwise read (nothing proceeds until you do).
-3. See a plain-language check against the applicable band and tariff, with sources and dates.
-4. If something does not match, get an evidence checklist and a complaint draft. You edit and approve it, and you send it yourself.
-
-**What makes it AI-native.** Multimodal input, structured streamed output, human review gates, and a strict split of responsibilities: **the model reads and explains, code does the arithmetic, and reference data supplies the facts.**
+Every AI step has a manual fallback, and nothing is saved or shared without explicit teacher approval.
 
 ## Architecture at a glance
 
-The full annotated diagram, trust boundaries, and the "Check my token" sequence are in [docs/02-system-boundary-diagram.md](docs/02-system-boundary-diagram.md).
+- **Browser:** forms, streaming render, inline editing, approve/reject, loading and error states
+- **Next.js server:** auth, validation, prompt building, model calls, output validation, persistence, all secrets
+- **Model:** drafts lessons, quiz questions and feedback suggestions
+- **Data store:** teachers, classes, lessons, quizzes, preferences
 
-```mermaid
-flowchart LR
-  BR["Browser<br/>upload, confirm, review, approve"] -->|HTTPS| SV["Server<br/>validate, mask, orchestrate, guard"]
-  SV --> AI["AI model via Vercel AI SDK<br/>extract, explain, draft"]
-  SV --> TL["Tools<br/>unit calculator, reference lookup"]
-  SV --> DT[("Data<br/>tariffs with sources, templates, temporary cases")]
-  SV -->|streamed results| BR
-```
-
-## Key decisions
-
-- **AI platform:** built against Anthropic (Claude) through the Vercel AI SDK. **This is swappable:** the AI SDK keeps frontend code the same regardless of provider, so moving to OpenAI or another provider changes a provider package and configuration, not the UI. Provider-specific code will live in one server module, and the model identifier will come from an environment variable.
-- **Framework:** Next.js (App Router), TypeScript, deployed on Vercel.
-- **No arithmetic by the model.** All money and energy calculations run in a calculator tool.
-- **Every factual claim carries a source and an effective date**, or the product says it cannot confirm.
-- **Human in the loop:** extraction must be confirmed and drafts must be approved. The app never sends anything on the user's behalf.
-- **Privacy by design:** no API keys or sensitive identifiers in the browser, token codes masked and never stored, manual entry as an alternative to uploading a photo.
+See the [system diagram](./docs/system-diagram.md) for details.
 
 ## Tech stack
 
-| Now (Phase 1a) | Planned |
-|---|---|
-| Next.js App Router, React, TypeScript | Vercel AI SDK with an Anthropic provider (OpenAI swappable) |
-| Placeholder landing page | Route handlers for upload, extraction, analysis |
-| Vercel deployment from GitHub | Calculator and reference lookup tools, case store, evaluation suite |
+- Next.js (App Router), TypeScript, Tailwind CSS
+- Vercel AI SDK
+- Anthropic (Claude) as the default provider; **swappable**, because the AI SDK keeps frontend code the same across providers
+- Deployed on Vercel
 
 ## Getting started
 
-Requires Node.js 20.9 or newer.
-
 ```bash
+git clone <repo-url>
+cd teachkit
 npm install
-npm run dev      # http://localhost:3000
-npm run build    # production build check
+cp .env.example .env.local   # add your provider key
+npm run dev
 ```
 
-No environment variables are needed yet. When model calls are added, secrets will be read from server-side environment variables only. Never prefix a secret so that it is exposed to the browser.
-
-## Deploy to Vercel
-
-1. Push this repository to GitHub.
-2. Sign in to [vercel.com](https://vercel.com) with GitHub and choose **Add New, then Project**.
-3. Import this repository. Vercel detects Next.js automatically, so leave the defaults.
-4. Click **Deploy**. Every later push to the main branch deploys automatically.
-5. Copy the production URL (for example `https://meterwise.vercel.app`) into the **Live site** line at the top of this README and push again.
-
-## Repository layout
+Environment variables (server-only, never prefixed with `NEXT_PUBLIC_`):
 
 ```
-.
-├── app/                      # Next.js App Router (placeholder landing page)
-├── docs/
-│   ├── 01-product-brief.md
-│   ├── 02-system-boundary-diagram.md
-│   └── 03-risk-register.md
-├── next.config.ts
-├── package.json
-└── README.md
+ANTHROPIC_API_KEY=
 ```
+
+## Deployment
+
+The repo is connected to Vercel. Every push to `main` deploys automatically.
 
 ## Roadmap
 
-| Phase | Focus | State |
-|---|---|---|
-| 1a | Product brief, boundary diagram, risk register, README, live URL | This submission |
-| 1b | Codebase setup: structure, tooling, environment handling, pilot DisCo and sample receipts | Next |
-| Later modules | Streaming, tool calling, generative UI, retrieval, accounts and persistence, evaluations and guardrails, observability | Planned extension points (see the brief) |
+| Module | Focus |
+|---|---|
+| Phase 1 | Product brief, system diagram, risk register, README, live URL |
+| Next modules | AI SDK integration, streaming lesson generation, structured quiz output, persistence, teacher preferences, tool use, evals |
 
-## Important notes
+## Principles
 
-- Meterwise gives information, not legal advice.
-- Items marked **[VERIFY]** in the brief come from press coverage or older regulatory documents and must be confirmed before being stated publicly.
-- The "Meterwise" name, and the claim that no equivalent tool exists, still need to be checked (see the brief, section 17).
+- The teacher is always the decision-maker.
+- Secrets, prompts and student data stay on the server.
+- Failures are recoverable: no lost work, always a manual path.

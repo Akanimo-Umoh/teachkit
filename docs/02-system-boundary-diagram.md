@@ -1,164 +1,111 @@
-# Meterwise: System Boundary Diagram
+# TeachKit: System Boundary Diagram
 
-**Version 0.1 · Phase 1a · 30 September 2026**
+This diagram shows what runs in the **browser**, the **server**, the **model** and **external services**, and what crosses each boundary. GitHub renders the Mermaid blocks below automatically.
 
-This is the core evidence for the Phase 1a outcome: it shows where every piece of Meterwise runs (browser, server, model, data, tools) **before any frontend code is written**, and where trust boundaries sit.
-
-Related documents: [Product brief](01-product-brief.md) · [Risk register](03-risk-register.md) · [README](../README.md)
-
-> GitHub renders the Mermaid diagrams below automatically. If you view this file somewhere that does not, paste each code block into [mermaid.live](https://mermaid.live).
-
----
-
-## 1. Boundary diagram
-
-Solid arrows are data flows. The dashed arrow is an action the user takes themselves, outside the app.
+## 1. System boundaries
 
 ```mermaid
 flowchart LR
-  subgraph B["BROWSER - untrusted zone"]
-    UI["Capture and upload UI<br/>compress image, strip location metadata"]
-    CONF["Confirm extracted fields<br/>edit or approve"]
-    VIEW["Streaming results UI<br/>finding cards, checklist, case chat"]
-    DRAFT["Draft editor<br/>fills placeholders from in-memory data"]
-    PREF["UI preferences only<br/>language, text size"]
+  subgraph B["BROWSER (untrusted)"]
+    direction TB
+    B1["Request form (class, subject, topic)"]
+    B2["Streaming draft renderer"]
+    B3["Inline editor + per-section regenerate"]
+    B4["Approve / Reject / Write manually"]
+    B5["Loading, error, offline, fallback UI"]
+    B6["Unsaved draft state (React)"]
   end
 
-  subgraph S["SERVER - Next.js route handlers on Vercel - trusted zone"]
-    GATE["Input gate<br/>file type and size checks, rate limits, session"]
-    MASK["Privacy layer<br/>mask token codes, IDs, phone numbers"]
-    ORCH["Orchestrator<br/>prompts, tool calls, output schemas"]
-    GUARD["Output guard<br/>sources required, no legal conclusions"]
+  subgraph S["NEXT.JS SERVER (trusted, on Vercel)"]
+    direction TB
+    S1["Auth + session check"]
+    S2["Input validation + rate limiting"]
+    S3["Prompt builder (system prompt + preferences)"]
+    S4["AI SDK call (provider-agnostic)"]
+    S5["Output schema validation"]
+    S6["Persistence layer"]
   end
 
-  subgraph T["TOOLS - called only by the orchestrator"]
-    CALC["Unit calculator<br/>all money and energy maths in code"]
-    LOOK["Reference lookup<br/>band and tariff by DisCo and date"]
+  subgraph M["MODEL LAYER"]
+    M1["LLM (Anthropic by default, swappable)"]
   end
 
-  subgraph M["MODEL LAYER - via Vercel AI SDK, provider swappable"]
-    LLM["AI model<br/>vision extraction, explanation, drafting, Q and A"]
+  subgraph D["DATA + EXTERNAL"]
+    D1[("Database: teachers, classes, lessons, quizzes, preferences")]
+    D2["AI provider API"]
   end
 
-  subgraph D["DATA LAYER - server side only"]
-    REF[("Reference data<br/>bands and tariffs with source and effective date")]
-    TPL[("Complaint templates and checklists<br/>versioned")]
-    CASE[("Case store<br/>temporary with expiry, no raw images by default")]
-  end
-
-  subgraph X["EXTERNAL"]
-    PROV["Model provider API"]
-    OFFICIAL["DisCo and regulator websites<br/>link out only"]
-  end
-
-  UI -->|"image over HTTPS"| GATE
-  GATE --> MASK
-  MASK --> ORCH
-  ORCH -->|"image and schema for extraction"| LLM
-  LLM -->|"provider API call"| PROV
-  LLM -->|"structured fields with confidence"| ORCH
-  ORCH --> GUARD
-  GUARD -->|"fields to confirm, token masked"| CONF
-  CONF -->|"confirmed fields"| GATE
-  ORCH -->|"tool calls"| CALC
-  ORCH -->|"tool calls"| LOOK
-  LOOK --> REF
-  ORCH --> TPL
-  ORCH <--> CASE
-  ORCH -->|"numbers supplied, not computed by model"| LLM
-  GUARD -->|"streamed findings, sources, confidence"| VIEW
-  VIEW --> DRAFT
-  DRAFT -.->|"user copies and sends it themselves"| OFFICIAL
-  PREF -.- UI
-
-  classDef client fill:#dbe4ff,stroke:#1f3fd1,color:#0b1220;
-  classDef server fill:#e3f3e6,stroke:#2f7d44,color:#0b1220;
-  classDef tool fill:#fff2c2,stroke:#a87b00,color:#0b1220;
-  classDef model fill:#f3e1ff,stroke:#7b2fa8,color:#0b1220;
-  classDef data fill:#e8e8e8,stroke:#555555,color:#0b1220;
-  classDef ext fill:#ffe0dc,stroke:#b03a2e,color:#0b1220;
-  class UI,CONF,VIEW,DRAFT,PREF client;
-  class GATE,MASK,ORCH,GUARD server;
-  class CALC,LOOK tool;
-  class LLM model;
-  class REF,TPL,CASE data;
-  class PROV,OFFICIAL ext;
+  B1 -->|"HTTPS request, no secrets"| S1
+  S1 --> S2 --> S3 --> S4
+  S4 -->|"prompt"| D2
+  D2 --- M1
+  M1 -->|"streamed tokens / structured output"| S4
+  S4 --> S5
+  S5 -->|"validated stream"| B2
+  B2 --> B3 --> B4
+  B4 -->|"approved content"| S6
+  S6 <--> D1
+  B5 -.->|"on failure"| B3
 ```
 
----
+### What crosses each boundary
 
-## 2. What runs where
-
-| Piece | Runs in | Reason it lives there |
+| Boundary | Allowed to cross | Never crosses |
 |---|---|---|
-| Image capture, compression, location-metadata removal | **Browser** | Reduces upload size on poor connections and removes data before it leaves the device |
-| Confirmation and edit forms for extracted fields | **Browser** | Human review gate (G1) |
-| Streaming results, finding cards, evidence checklist, case chat UI | **Browser** | Presentation and interaction only |
-| Draft editor and placeholder filling | **Browser** (in memory) | Identifiers are inserted locally so the model never needs to see the full values when drafting |
-| UI preferences (language, text size, plain-language mode) | **Browser** storage | Non-sensitive |
-| Upload validation, rate limiting, session handling | **Server** | Cannot be trusted to the client |
-| Masking of token codes, IDs, and phone numbers | **Server** | Must happen before any text reaches the model or logs |
-| Prompt assembly, tool orchestration, output schemas | **Server** | Keeps prompts and tool definitions private |
-| Output guard (sources present, no legal conclusions, no accusations) | **Server** | Enforced independently of the model |
-| Vision extraction, explanation, drafting, Q and A | **Model** | What the model is good at |
-| Unit and cost calculations | **Tool (code)** | Deterministic and testable; the model never does arithmetic |
-| Band and tariff lookup | **Tool + reference data** | Facts with a source and an effective date |
-| Case store, templates, reference data | **Data layer** (server side) | Never delivered wholesale to the client |
-| Sending a complaint | **User, outside the app** | Human control; the app never sends on the user's behalf |
+| Browser → Server | Teacher's request, edits, approve/reject actions | Nothing secret originates in the browser |
+| Server → Browser | Validated, structured, teacher-scoped output; session cookie (HttpOnly) | API keys, system prompts, raw model responses, other teachers' data |
+| Server → Model | Constructed prompt, teacher preferences, class level and topic | Student names or identifiers, credentials of the user |
+| Model → Server | Streamed text / structured JSON | Nothing is trusted until validated |
 
----
-
-## 3. Trust boundaries and what never crosses them
-
-| Boundary | Never crosses it |
-|---|---|
-| **Browser to Server** | Nothing from the client is trusted without validation (file type, size, field ranges, schema) |
-| **Server to Browser** | API keys, system prompts, tool definitions, other users' data, unmasked token codes, raw provider responses, internal logs |
-| **Server to Model** | Unmasked identifiers beyond what extraction from the image requires, secrets, other users' data |
-| **Model to Server** | Model output is treated as untrusted input: it is validated against a schema, checked for sources, and figures are compared with tool output |
-| **Server to External** | Only masked or minimal data; no images stored by the provider integration by default |
-
----
-
-## 4. Sequence: "Check my token"
+## 2. Lesson generation sequence (happy path and fallbacks)
 
 ```mermaid
 sequenceDiagram
-  autonumber
-  actor U as User
+  actor T as Teacher
   participant B as Browser
-  participant S as Server
-  participant M as AI model
-  participant T as Calculator and reference data
+  participant S as Next.js Server
+  participant M as Model
 
-  U->>B: Choose receipt photo
-  B->>B: Compress to 1 MB or less and strip location metadata
-  B->>S: Upload image over HTTPS
-  S->>S: Validate type and size, apply rate limit
-  S->>M: Extract fields from image using a fixed schema
-  M-->>S: Structured fields with confidence
-  S->>S: Validate schema, mask and drop token code
-  S-->>B: Fields to confirm, token masked
-  U->>B: Confirm or edit fields
-  B->>S: Confirmed fields
-  S->>T: Look up band and tariff, compute expected units
-  T-->>S: Expected units with source and effective date
-  S->>M: Explain the result, figures supplied not computed
-  M-->>S: Plain language explanation, streamed
-  S->>S: Output guard checks sources and wording
-  S-->>B: Stream findings, sources, and confidence
-  U->>B: Build my case and approve draft
-  B->>B: Fill identifier placeholders locally from in-memory data
-  U->>U: Copy the draft and send it outside the app
+  T->>B: Enter class, subject, topic
+  B->>S: POST /api/lessons/generate
+  S->>S: Verify session, validate input, rate limit
+  S->>M: Prompt (system rules + preferences + request)
+  M-->>S: Streamed draft
+  S->>S: Validate against lesson schema
+  S-->>B: Stream validated sections
+  B-->>T: Show "AI draft" for review
+  T->>B: Edit sections / regenerate a section
+  T->>B: Approve
+  B->>S: POST /api/lessons (approved content)
+  S->>S: Save to database
+  S-->>B: Saved confirmation
+
+  alt Model error or timeout
+    S-->>B: Recoverable error + partial draft
+    B-->>T: Retry / Write manually / Save partial
+  else Output fails schema validation
+    S-->>B: Parsed parts + validation error
+    B-->>T: Fix manually or retry
+  end
 ```
 
----
+## 3. Approval loop (applies to lessons, quizzes and feedback)
 
-## 5. Design rules this diagram enforces
+```mermaid
+stateDiagram-v2
+  [*] --> Requested
+  Requested --> Generating
+  Generating --> Draft: valid output
+  Generating --> Failed: error / invalid output
+  Failed --> Generating: retry
+  Failed --> ManualEdit: write manually
+  Draft --> ManualEdit: edit
+  ManualEdit --> Draft: continue editing
+  Draft --> Generating: regenerate
+  Draft --> Approved: teacher approves
+  Draft --> Discarded: teacher rejects
+  Approved --> [*]
+  Discarded --> [*]
+```
 
-1. **The browser never talks to the model provider.** Every model call goes through the server.
-2. **The model never does arithmetic.** Numbers come from the calculator tool and are passed to the model to explain.
-3. **Every factual claim about bands, tariffs, or procedures carries a source and an effective date**, or the product says it cannot confirm.
-4. **Nothing leaves the app without the user approving it**, and the app never sends anything on their behalf.
-5. **Sensitive identifiers are masked after extraction and are never persisted in the browser.**
-6. **Provider-specific code lives in one server module**, so switching between Anthropic and OpenAI does not touch the UI.
+Only the **Approved** state is written to the lesson/quiz library. Nothing moves from AI output to saved or shared content without the teacher's explicit action.
