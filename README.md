@@ -4,7 +4,7 @@ An AI teaching workspace that helps private-school teachers prepare lessons, gen
 
 > **AI proposes → Teacher reviews → Teacher decides → System records.**
 
-**Live demo:** _add Vercel URL here_
+**Live demo:** [TeachKit Live Demo](https://teach-kit.vercel.app/)
 **Author:** Akanimo Umoh
 **Programme:** Flexisaf Internship, Advanced Frontend (Fully AI-Native Track)
 
